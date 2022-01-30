@@ -55,28 +55,6 @@ def Vector_Normalise(vec):
 
     return vec
 
-def Matrix_PointAt(pos, target, up):
-    # Calculate new forward direction
-    newForward = target - pos
-    newForward = Vector_Normalise(newForward)
-
-    # Calculate new Up direction
-    a = np.multiply(newForward, np.dot(up, newForward))
-    newUp = up - a
-    newUp = Vector_Normalise(newUp)
-    # New Right direction is easy, its just cross product
-    newRight = np.cross(newUp[:3], newForward[:3])
-
-    # Construct Dimensioning and Translation Matrix	
-    matrix = np.zeros((4,4))
-    matrix[0][0] = newRight[0];	    matrix[0][1] = newRight[1];     matrix[0][2] = newRight[2];	matrix[0][3] = 0
-    matrix[1][0] = newUp[0];		matrix[1][1] = newUp[1];		matrix[1][2] = newUp[2];		matrix[1][3] = 0
-    matrix[2][0] = newForward[0];	matrix[2][1] = newForward[1];	matrix[2][2] = newForward[2];	matrix[2][3] = 0
-    matrix[3][0] = pos[0];		    matrix[3][1] = pos[1];		    matrix[3][2] = pos[2];		matrix[3][3] = 1
-    
-    return matrix
-
-
 def read_obj(fileName):
     vertices = []
     mesh = []
@@ -101,7 +79,6 @@ def read_obj(fileName):
     f.close()
 
     return mesh
-
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
 
