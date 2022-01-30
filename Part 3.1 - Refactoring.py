@@ -1,27 +1,6 @@
 import pygame as pg
 import numpy as np
 
-SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
-
-pg.init()
-screen = pg.display.set_mode((SCREEN_WIDTH,SCREEN_HEIGHT))
-running = True
-clock = pg.time.Clock()
-surf = pg.surfarray.make_surface(np.zeros((SCREEN_WIDTH,SCREEN_HEIGHT, 3)))
-Theta = 0
-Camera = np.zeros(4)
-
-def MultiplyMatrixVector(vec3di, mat4x4):
-    vec3d = vec3di.copy()
-    vec3d[0] = vec3di[0] * mat4x4[0][0] + vec3di[1] * mat4x4[1][0] + vec3di[2] * mat4x4[2][0] + mat4x4[3][0]
-    vec3d[1] = vec3di[0] * mat4x4[0][1] + vec3di[1] * mat4x4[1][1] + vec3di[2] * mat4x4[2][1] + mat4x4[3][1]
-    vec3d[2] = vec3di[0] * mat4x4[0][2] + vec3di[1] * mat4x4[1][2] + vec3di[2] * mat4x4[2][2] + mat4x4[3][2]
-    w = vec3di[0] * mat4x4[0][3] + vec3di[1] * mat4x4[1][3] + vec3di[2] * mat4x4[2][3] + mat4x4[3][3]
-    if w != 0:
-        vec3d[0] /= w;        vec3d[1] /= w;        vec3d[2] /= w
-    
-    return vec3d
-
 def Matrix_MakeRotationX(AngleRad):
     matrix = np.identity(4)
     matrix[1][1] = np.cos(AngleRad)
@@ -31,7 +10,6 @@ def Matrix_MakeRotationX(AngleRad):
 
     return matrix
 	
-
 def Matrix_MakeRotationY(AngleRad):
     matrix = np.identity(4)
     matrix[0][0] = np.cos(AngleRad)
@@ -40,7 +18,6 @@ def Matrix_MakeRotationY(AngleRad):
     matrix[2][2] = np.cos(AngleRad)
 	
     return matrix
-
 
 def Matrix_MakeRotationZ(AngleRad):
     matrix = np.identity(4)
@@ -56,6 +33,7 @@ def Matrix_MakeTranslation(x, y, z):
     matrix[3][0] = x
     matrix[3][1] = y
     matrix[3][2] = z
+	
     return matrix
 
 def Matrix_MakeProjection(FovDegrees, AspectRatio, Near, Far):
@@ -124,16 +102,22 @@ def read_obj(fileName):
 
     return mesh
 
-meshCube = read_obj('VideoShip.obj')
 
-#  Projection Matrix
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+
+pg.init()
+screen = pg.display.set_mode((SCREEN_WIDTH,SCREEN_HEIGHT))
+running = True
+clock = pg.time.Clock()
+surf = pg.surfarray.make_surface(np.zeros((SCREEN_WIDTH,SCREEN_HEIGHT, 3)))
+Theta = 0
+Camera = np.zeros(4)
 Near = 0.1
 Far = 1000
 FovDegrees = 90
 AspectRatio = SCREEN_HEIGHT / SCREEN_WIDTH
-
+meshCube = read_obj('VideoShip.obj')
 matProj = Matrix_MakeProjection(FovDegrees, AspectRatio, Near, Far)
-Yaw = 0
 
 while running:
     elapsed_time = clock.tick()/1000
@@ -146,14 +130,9 @@ while running:
     
     #  Clear Screen
     surf.fill([0,0,0])
-
-    #  Set up rotation matrices
-    
-
-    # Set up "World Transform" though not updating theta 
-    # makes this a bit redundant
     Theta += 1 * elapsed_time # Uncomment to spin me right round baby right round
-
+	
+    # Set up "World Tranmsform"
     matRotZ = Matrix_MakeRotationZ(Theta * 0.5)
     matRotX = Matrix_MakeRotationX(Theta)
 
