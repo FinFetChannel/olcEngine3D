@@ -1,7 +1,8 @@
 import pygame as pg
 import numpy as np
+from numba import njit
 
-SCREEN_W, SCREEN_H = 1280, 720
+SCREEN_W, SCREEN_H = 800, 600
 FOV = np.pi/2
 FOV_V = FOV*SCREEN_H/SCREEN_W
 
@@ -13,14 +14,17 @@ def main():
     clock = pg.time.Clock()
     surf = pg.surfarray.make_surface(np.zeros((SCREEN_W,SCREEN_H, 3)))
 
-    points, triangles =  read_obj('VideoShip.obj')
-    # points = [[1, 1, 0, 1, 1], [1, 2, 0, 1, 1], [1, .5, 1, 1, 1]]
-    # triangles = [[0,1,2]]
+    #points, triangles =  read_obj('VideoShip.obj')
+    points = np.asarray([[1, 1, 1, 1, 1], [4, 2, 0, 1, 1], [1, .5, 3, 1, 1]])
+    triangles = np.asarray([[0,1,2], [2,1,0]])
 
-    camera = np.asarray([0.5, 0.5, 0.5, 4.86, 0])
+    camera = np.asarray([13, 0.5, 2, 3.3, 0])
     light_direction = np.asarray([0, 1, 1])
+    
+    z_order, TrianglesToRaster, colors = np.zeros(len(triangles)), triangles.copy(), np.zeros((len(triangles), 3))
 
     while running:
+        pg.mouse.set_pos(SCREEN_W/2, SCREEN_H/2)
         surf.fill([50,127,200])
         elapsed_time = clock.tick()*0.001
         for event in pg.event.get():
@@ -31,57 +35,19 @@ def main():
                     running = False
         
         points = project_points(points, camera)
-        # camera_vector = np.asarray([camera[0]+np.cos(camera[3]), camera[1]+np.sin(camera[3]), camera[2]+np.sin(camera[4]) ])
-        # camera_vector = camera_vector/np.linalg.norm(camera_vector)
-
-        z_order, TrianglesToRaster, colors = [], [], []
-        for triangle in triangles:
-            point00 = points[triangle[0]][:3]
-            point11 = points[triangle[1]][:3] 
-            point22 = points[triangle[2]][:3]
-
-            CameraRay = point00 - camera[:3]
-            CameraRay = CameraRay/np.linalg.norm(CameraRay)
-
-            # Use Cross-Product to get surface normal
-            line1 = point11 - point00
-            line2 = point22 - point00
-
-            normal = np.cross(line1, line2)
-            normal = normal/np.linalg.norm(normal)
-            
-            # get projected 2d points
-            point0 = points[triangle[0]][3:5]
-            point1 = points[triangle[1]][3:5] 
-            point2 = points[triangle[2]][3:5]
-
-            minx = min(point0[0],  point1[0],  point1[0])
-            maxx = max(point0[0],  point1[0],  point1[0])
-            miny = min(point0[1],  point1[1],  point1[1])
-            maxy = max(point0[1],  point1[1],  point1[1])
-
-            # check valid values
-            if (np.dot(normal, CameraRay) < 0 and minx > - 0.3*SCREEN_W and maxx < 1.3*SCREEN_W
-                and miny > - 0.3*SCREEN_H and maxy < 1.3*SCREEN_H):
-                
-                dp = min(1, max(0.1, np.dot(light_direction, normal)))
-                #print(dp)
-                colors.append(np.ones(3)*dp*255)
-
-                midpoint = [
-                            np.mean([point00[0], point11[0], point22[0]]),
-                            np.mean([point00[1], point11[1], point22[1]]),
-                            np.mean([point00[2], point11[2], point22[2]])
-                            ]
-                z_order.append( -np.linalg.norm(np.asarray(midpoint) - np.asarray(camera[:3])))
-                TrianglesToRaster.append([point0, point1, point2])
+        z_order, TrianglesToRaster, colors = sort_triangles(points, triangles, camera, light_direction, z_order, TrianglesToRaster, colors) 
         
         for index in np.argsort(np.asarray(z_order)):
-            pg.draw.polygon(surf, colors[index], TrianglesToRaster[index])                
+            if z_order[index] == 9999:
+                break
+            p0 = points[TrianglesToRaster[index][0]][3:]
+            p1 = points[TrianglesToRaster[index][1]][3:]
+            p2 = points[TrianglesToRaster[index][2]][3:]
+            pg.draw.polygon(surf, colors[index], [p0, p1, p2])                
 
         screen.blit(surf, (0,0))
         pg.display.update()
-        pg.display.set_caption(str(round(1/(elapsed_time+1e-16), 1)))# + str(camera))
+        pg.display.set_caption(str(round(1/(elapsed_time+1e-16), 1)) + str(camera))
         camera = movement(camera, elapsed_time*10)
 
     return 0
@@ -95,7 +61,6 @@ def movement(camera, elapsed_time):
         rot = (rot + np.clip((p_mouse[0]-SCREEN_W/2)/SCREEN_W, -0.2, .2))%(2*np.pi)
         rotv = rotv + np.clip((p_mouse[1]-SCREEN_H/2)/SCREEN_H, -0.2, .2)
         rotv = np.clip(rotv, -1, 1)
-        pg.mouse.set_pos(SCREEN_W/2, SCREEN_H/2)
 
     if pressed_keys[ord('e')]:
         y += elapsed_time
@@ -118,52 +83,92 @@ def movement(camera, elapsed_time):
 
     return np.asarray([x, y, z, rot, rotv])
 
+@njit()
 def project_points(points, camera):
 
     for point in points:
-        # camera_vector = np.asarray([camera[0]+np.cos(camera[3]), camera[1]+np.sin(camera[3]), camera[2]+np.sin(camera[4]) ])
-        # camera_vector = camera_vector/np.linalg.norm(camera_vector)
 
-        # point_vector = np.asarray([point[0] - camera[0], point[1] - camera[1], point[2] - camera[2]])
-        # point_vector = point_vector/np.linalg.norm(point_vector)
+        # Calculate xy angle of vector from camera point to projection point
+        h_angle_camera_point = np.arctan((point[2]-camera[2])/(point[0]-camera[0]))
+        
+        # Check if it isn't pointing backwards
+        if abs(camera[0]+np.cos(h_angle_camera_point)-point[0]) > abs(camera[0]-point[0]):
+            h_angle_camera_point = (h_angle_camera_point - np.pi)%(2*np.pi)
 
-        # if np.dot(camera_vector, point_vector) < -0.5:
-            # Calculate xy angle of vector from camera point to projection point
-            h_angle_camera_point = np.arctan((point[2]-camera[2])/(point[0]-camera[0]))
-            
-            # Check if it isn't pointing backwards
-            if abs(camera[0]+np.cos(h_angle_camera_point)-point[0]) > abs(camera[0]-point[0]):
-                h_angle_camera_point = (h_angle_camera_point - np.pi)%(2*np.pi)
+        # Calculate difference between camera angle and pointing angle
+        h_angle = (h_angle_camera_point-camera[3])%(2*np.pi)
+        
+        # Bring to -pi to pi range
+        if h_angle > np.pi:
+            h_angle =  h_angle - 2*np.pi
+        
+        point[3] = SCREEN_W*h_angle/FOV + SCREEN_W/2
 
-            # Calculate difference between camera angle and pointing angle
-            h_angle = (h_angle_camera_point-camera[3])%(2*np.pi)
-            
-            # Bring to -pi to pi range
-            if h_angle > np.pi:
-                h_angle =  h_angle - 2*np.pi
-            
-            point[3] = SCREEN_W*h_angle/FOV + SCREEN_W/2
+        # Calculate xy distance from camera point to projection point
+        h_distance = np.sqrt((point[0]-camera[0])**2 + (point[2]-camera[2])**2)
+        sine = max(-1, min(1, (camera[1]-point[1])/h_distance))
+        
+        # Calculate angle to xy plane
+        v_angle_camera_point = np.arcsin(sine)
 
-            # Calculate xy distance from camera point to projection point
-            h_distance = np.sqrt((point[0]-camera[0])**2 + (point[2]-camera[2])**2)
-            sine = max(-1, min(1, (camera[1]-point[1])/h_distance))
-            
-            # Calculate angle to xy plane
-            v_angle_camera_point = np.arcsin(sine)
+        # Calculate difference between camera verticam angle and pointing vertical angle
+        v_angle = (v_angle_camera_point - camera[4])%(2*np.pi)
 
-            # Calculate difference between camera verticam angle and pointing vertical angle
-            v_angle = (v_angle_camera_point - camera[4])%(2*np.pi)
+        if v_angle > np.pi:
+            v_angle =  v_angle - 2*np.pi
 
-            if v_angle > np.pi:
-                v_angle =  v_angle - 2*np.pi
-
-            point[4] = SCREEN_H*v_angle/FOV_V + SCREEN_H/2
-
-        # else:
-        #     point[3] = -SCREEN_W
-        #     point[4] = -SCREEN_H
+        point[4] = SCREEN_H*v_angle/FOV_V + SCREEN_H/2
 
     return points
+
+@njit()
+def dot_3d(arr1, arr2):
+    return arr1[0]*arr2[0] + arr1[1]*arr2[1] + arr1[2]*arr2[2]
+
+@njit()
+def sort_triangles(points, triangles, camera, light_direction, z_order, TrianglesToRaster, colors):
+    for i in range(len(triangles)):
+        triangle = triangles[i]
+        point00 = points[triangle[0]][:3]
+        point11 = points[triangle[1]][:3] 
+        point22 = points[triangle[2]][:3]
+
+        CameraRay = point00 - camera[:3]
+        CameraRay = CameraRay/np.sqrt(CameraRay[0]*CameraRay[0] + CameraRay[1]*CameraRay[1] + CameraRay[2]*CameraRay[2])
+
+        # Use Cross-Product to get surface normal
+        line1 = point11 - point00
+        line2 = point22 - point00
+
+        normal = np.cross(line1, line2)
+        normal = normal/np.sqrt(normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2])
+        
+        # get projected 2d points
+        point0 = points[triangle[0]][3:5]
+        point1 = points[triangle[1]][3:5] 
+
+        minx = min(point0[0],  point1[0],  point1[0])
+        maxx = max(point0[0],  point1[0],  point1[0])
+        miny = min(point0[1],  point1[1],  point1[1])
+        maxy = max(point0[1],  point1[1],  point1[1])
+
+        # check valid values
+        if (dot_3d(normal, CameraRay) < 0 and minx > - 1*SCREEN_W and maxx < 2*SCREEN_W
+            and miny > - 1*SCREEN_H and maxy < 2*SCREEN_H):
+            
+            dp = min(1, max(0.1, dot_3d(light_direction, normal)))
+            colors[i] = (np.ones(3)*dp*255)
+
+            midpoint = [
+                        np.mean(np.asarray([point00[0], point11[0], point22[0]])),
+                        np.mean(np.asarray([point00[1], point11[1], point22[1]])),
+                        np.mean(np.asarray([point00[2], point11[2], point22[2]]))
+                        ]
+            zz = np.asarray(midpoint) - camera[:3]
+            z_order[i] = -np.sqrt(zz[0]*zz[0] + zz[1]*zz[1] + zz[2]*zz[2])
+            TrianglesToRaster[i] = triangle
+        else: z_order[i] = 9999
+    return z_order, TrianglesToRaster, colors
 
 def read_obj(fileName):
     vertices = []
