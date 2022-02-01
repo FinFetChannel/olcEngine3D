@@ -8,10 +8,10 @@ FOV_V = FOV*SCREEN_H/SCREEN_W
 
 def main():
     pg.init()
-    screen = pg.display.set_mode((SCREEN_W, SCREEN_H, 3))
+    screen = pg.display.set_mode((SCREEN_W, SCREEN_H))
     running = True
     clock = pg.time.Clock()
-    surf = pg.surfarray.make_surface(np.zeros((SCREEN_W,SCREEN_H)))
+    surf = pg.surfarray.make_surface(np.zeros((SCREEN_W,SCREEN_H, 3)))
 
     points, triangles =  read_obj('VideoShip.obj')
     # points = [[1, 1, 0, 1, 1], [1, 2, 0, 1, 1], [1, .5, 1, 1, 1]]
@@ -94,7 +94,7 @@ def movement(camera, elapsed_time):
         p_mouse = pg.mouse.get_pos()
         rot = (rot + np.clip((p_mouse[0]-SCREEN_W/2)/SCREEN_W, -0.2, .2))%(2*np.pi)
         rotv = rotv + np.clip((p_mouse[1]-SCREEN_H/2)/SCREEN_H, -0.2, .2)
-        rotv = np.clip(rotv, -3, 3)
+        rotv = np.clip(rotv, -1, 1)
         pg.mouse.set_pos(SCREEN_W/2, SCREEN_H/2)
 
     if pressed_keys[ord('e')]:
