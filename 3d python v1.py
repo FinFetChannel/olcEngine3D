@@ -8,7 +8,7 @@ FOV_V = FOV*SCREEN_H/SCREEN_W
 
 def main():
     pg.init()
-    screen = pg.display.set_mode((SCREEN_W,SCREEN_H))
+    screen = pg.display.set_mode((SCREEN_W, SCREEN_H, 3))
     running = True
     clock = pg.time.Clock()
     surf = pg.surfarray.make_surface(np.zeros((SCREEN_W,SCREEN_H)))
