@@ -77,9 +77,7 @@ def main():
                 TrianglesToRaster.append([point0, point1, point2])
         
         for index in np.argsort(np.asarray(z_order)):
-            if not np.isnan(TrianglesToRaster[index]).any():
-                color = colors[index] # (np.random.randint(0, 256, 1)*np.ones(3)).astype(int)
-                pg.draw.polygon(surf, color, TrianglesToRaster[index])                
+            pg.draw.polygon(surf, colors[index], TrianglesToRaster[index])                
 
         screen.blit(surf, (0,0))
         pg.display.update()
@@ -90,8 +88,8 @@ def main():
 
 def movement(camera, elapsed_time):
     pressed_keys = pg.key.get_pressed()
-    posx, posy, posz, rot, rotv = camera
-    x, y, diag, z = posx, posy, 0, posz
+    x, y, z, rot, rotv = camera
+    diag =  0
     if pg.mouse.get_focused():
         p_mouse = pg.mouse.get_pos()
         rot = (rot + np.clip((p_mouse[0]-SCREEN_W/2)/SCREEN_W, -0.2, .2))%(2*np.pi)
@@ -99,6 +97,11 @@ def movement(camera, elapsed_time):
         rotv = np.clip(rotv, -3, 3)
         pg.mouse.set_pos(SCREEN_W/2, SCREEN_H/2)
 
+    if pressed_keys[ord('e')]:
+        y += elapsed_time
+    elif pressed_keys[ord('q')]:
+        y -= elapsed_time
+        
     if pressed_keys[pg.K_UP] or pressed_keys[ord('w')]:
         x, z, diag = x + elapsed_time*np.cos(rot), z + elapsed_time*np.sin(rot), 1
 
@@ -113,9 +116,7 @@ def movement(camera, elapsed_time):
         elapsed_time = elapsed_time/(diag+1)
         x, z = x - elapsed_time*np.sin(rot), z + elapsed_time*np.cos(rot)
 
-    posx, posz = x, z
-
-    return np.asarray([posx, posy, posz, rot, rotv])
+    return np.asarray([x, y, z, rot, rotv])
 
 def project_points(points, camera):
 
@@ -145,9 +146,10 @@ def project_points(points, camera):
 
             # Calculate xy distance from camera point to projection point
             h_distance = np.sqrt((point[0]-camera[0])**2 + (point[2]-camera[2])**2)
-
+            sine = max(-1, min(1, (camera[1]-point[1])/h_distance))
+            
             # Calculate angle to xy plane
-            v_angle_camera_point = np.arcsin((camera[1]-point[1])/h_distance)
+            v_angle_camera_point = np.arcsin(sine)
 
             # Calculate difference between camera verticam angle and pointing vertical angle
             v_angle = (v_angle_camera_point - camera[4])%(2*np.pi)
